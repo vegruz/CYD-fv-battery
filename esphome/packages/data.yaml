@@ -1,0 +1,13 @@
+# Valori letti da Home Assistant. NaN se l'entità è unavailable/unknown.
+sensor:
+  - platform: homeassistant
+    id: batt_soc
+    entity_id: ${soc_entity}
+  - platform: homeassistant
+    id: batt_power
+    entity_id: ${power_entity}
+    filters:
+      - multiply: ${power_scale}   # converte in W (il firmware ragiona in W)
+  - platform: homeassistant
+    id: data_age
+    entity_id: ${age_entity}

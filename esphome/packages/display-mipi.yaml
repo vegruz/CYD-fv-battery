@@ -1,0 +1,24 @@
+# Driver default: Freenove FNK0103/FNK0114B 2,8" con controller ST7789 (CS 15, DC 2 nel preset).
+# Configurazione Freenove di riferimento (TFT_eSPI): ST7789, BGR, inversione OFF, BL GPIO21.
+spi:
+  - id: disp_spi
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
+
+display:
+  - platform: mipi_spi
+    id: disp
+    spi_id: disp_spi
+    model: ESP32-2432S028-7789   # variante ILI9341 (FNK0114F): ESP32-2432S028
+    color_order: bgr
+    invert_colors: false
+    rotation: 90
+    update_interval: 5s
+    lambda: |-
+      ui::draw_ui(it,
+          ui::UiInputs{id(batt_soc).state, id(batt_soc).has_state(), id(batt_power).state,
+                       id(data_age).state, wifi::global_wifi_component->is_connected(),
+                       api::global_api_server->is_connected()},
+          ui::UiConfig{${soc_green}, ${soc_yellow}, ${power_deadband_w}, ${power_invert},
+                       ${battery_capacity_kwh}, ${stale_after_min}},
+          id(font_big), id(font_small));

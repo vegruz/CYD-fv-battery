@@ -1,0 +1,56 @@
+# Accende il display al movimento rilevato dalla telecamera Reolink del garage (o al tocco dello
+# schermo, gestito direttamente dal firmware) e lo spegne dopo 5 minuti senza movimento né tocchi.
+# Il trigger "display acceso da 5 min" copre le accensioni senza movimento (tocco, riavvio del
+# display con restore ON, accensione manuale). Ogni tocco sposta in avanti lo spegnimento.
+alias: "Display garage - retroilluminazione su movimento"
+description: "Accende il display garage al movimento, spegne dopo 5 minuti senza movimento né tocchi."
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.garage_movimento
+    to: "on"
+    id: movimento
+  - trigger: state
+    entity_id: binary_sensor.garage_movimento
+    to: "off"
+    for:
+      minutes: 5
+    id: quiete
+  - trigger: state
+    entity_id: binary_sensor.display_garage_tocco
+    to: "off"
+    for:
+      minutes: 5
+    id: quiete
+  - trigger: state
+    entity_id: light.display_garage_retroilluminazione
+    to: "on"
+    for:
+      minutes: 5
+    id: quiete
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: movimento
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: light.display_garage_retroilluminazione
+      - conditions:
+          - condition: trigger
+            id: quiete
+          - condition: state
+            entity_id: binary_sensor.garage_movimento
+            state: "off"
+            for:
+              minutes: 5
+          - condition: state
+            entity_id: binary_sensor.display_garage_tocco
+            state: "off"
+            for:
+              minutes: 5
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: light.display_garage_retroilluminazione

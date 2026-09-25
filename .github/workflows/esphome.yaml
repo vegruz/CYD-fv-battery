@@ -1,0 +1,32 @@
+name: ESPHome
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ESPHome
+        run: pip install -r requirements.txt
+      - name: Throwaway secrets (random API key, never used on a device)
+        run: |
+          KEY=$(python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())")
+          sed -e "s|^api_encryption_key: .*|api_encryption_key: \"$KEY\"|" esphome/secrets.yaml.example > esphome/secrets.yaml
+      - name: Cache toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espressif
+            ~/.platformio
+            ~/.esphome
+            esphome/.esphome
+          key: esphome-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - name: Logic tests + config + compile (mipi, ili9xxx)
+        run: sh scripts/check.sh

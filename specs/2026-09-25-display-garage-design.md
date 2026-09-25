@@ -14,7 +14,7 @@
 
 ### Context and Problem Statement
 
-Serve un display a parete in garage che mostri lo stato dell'accumulo SolarEdge (30 kWh) letto da Home Assistant, per decidere se mettere in carica l'auto senza aprire l'app. Hardware: un solo Freenove CYD 2,8" (ESP32, ILI9341, 320×240). L'handoff proponeva la piattaforma ESPHome `ili9xxx` con framework Arduino. Dalla verifica sulla documentazione ESPHome corrente (settembre 2026) risulta che:
+Serve un display a parete in garage che mostri lo stato dell'accumulo SolarEdge (30 kWh) letto da Home Assistant, per decidere se mettere in carica l'auto senza aprire l'app. Hardware: un solo Freenove ESP32 Display FNK0103 B (ESP32-D0WD-V3, pannello 2,8" TN **ST7789**, 320×240). L'handoff indicava ILI9341: la verifica sulla scheda ha mostrato che è un ST7789 (vedi Implementation Notes). L'handoff proponeva la piattaforma ESPHome `ili9xxx` con framework Arduino. Dalla verifica sulla documentazione ESPHome corrente (settembre 2026) risulta che:
 
 - `ili9xxx` è deprecata ("may be removed in a future release"): il sostituto è `mipi_spi`;
 - `mipi_spi` offre il preset `ESP32-2432S028` (CYD 2,8" ILI9341) e le varianti `-7789` / `-9342`;
@@ -69,6 +69,7 @@ Inverter SolarEdge ──(cloud SE, ~15 min)──> HA (integrazione SolarEdge c
 - G5: mostrare l'età del dato ("agg. N min fa") e segnalarlo come vecchio oltre `stale_after_min`
 - G6: segnalare la disconnessione di Wi-Fi e dell'API HA
 - G7: retroilluminazione comandata da HA: accesa al movimento rilevato dalla telecamera Reolink, spenta dopo 5 minuti senza movimento
+- G9: un tocco qualsiasi sullo schermo accende la retroilluminazione (anche senza HA); ogni tocco sposta lo spegnimento automatico di 5 minuti
 - G8: configurazione parametrica (entità, soglie, capacità, segno della potenza) tramite `substitutions`, senza toccare il C++
 
 ### Non-goals
@@ -76,7 +77,7 @@ Inverter SolarEdge ──(cloud SE, ~15 min)──> HA (integrazione SolarEdge c
 - Scheda Freenove 3,2" (ordine annullato)
 - Integrazione SolarEdge Modbus locale
 - Consiglio "CARICA ORA / ASPETTA"
-- Touch, LVGL, comandi di ricarica
+- Interfaccia touch (pagine, pulsanti), LVGL, comandi di ricarica: il touch serve solo a risvegliare il display
 - Anteprima grafica su PC (piattaforma `host` con SDL)
 
 ## Design
@@ -86,22 +87,26 @@ Inverter SolarEdge ──(cloud SE, ~15 min)──> HA (integrazione SolarEdge c
 ```
 esphome/
 ├── display-garage.yaml            # entry point: substitutions + include dei package
-├── display-garage-ili9xxx.yaml    # variante di fallback (usata anche in CI)
-├── ui.h                           # rendering C++ condiviso
+├── ui_logic.h                     # logica pura (stati, soglie, calcoli), testata su PC
+├── ui.h                           # disegno C++ condiviso dai due driver
 ├── packages/
 │   ├── core.yaml                  # esp32 (ESP-IDF), wifi, api, ota, logger, backlight
 │   ├── data.yaml                  # sensori homeassistant (SOC, potenza, età dato)
-│   ├── display-mipi.yaml          # mipi_spi, preset ESP32-2432S028 (default)
+│   ├── display-mipi.yaml          # mipi_spi, preset ESP32-2432S028-7789 (default)
 │   ├── display-ili9xxx.yaml       # fallback ili9xxx, stesso id e stessa lambda
-│   └── ui.yaml                    # font, colori, include di ui.h
+│   ├── touch.yaml                 # XPT2046 su bus SPI dedicato: tocco → accende, sensore "Tocco" per HA
+│   └── ui.yaml                    # font, include di ui_logic.h e ui.h
 └── secrets.yaml.example
 homeassistant/
 ├── templates/solaredge_data_age.yaml
 └── automations/display-garage-backlight.yaml
-.github/workflows/esphome.yaml     # config + compile di entrambe le varianti
+tests/test_ui_logic.cpp            # test su PC di ui_logic.h
+scripts/test-logic.sh, check.sh    # test logica; verifica completa (test + config/compile dei due driver)
+requirements.txt                   # esphome==2026.9.0
+.github/workflows/esphome.yaml     # esegue scripts/check.sh
 ```
 
-Ogni package ha un solo compito. I package driver MUST esporre un display con `id: disp` e una lambda che chiama `draw_ui(it, cfg)`, così il cambio di driver non tocca il resto.
+Ogni package ha un solo compito. Il driver si sceglie con la substitution `display_driver` (`display: !include packages/display-${display_driver}.yaml`), anche da riga di comando: `esphome -s display_driver ili9xxx ...`. I package driver MUST esporre un display con `id: disp` e una lambda **identica** che chiama `ui::draw_ui(...)`, così il cambio di driver non tocca il resto.
 
 ### Parametri (`substitutions` in `display-garage.yaml`)
 
@@ -109,29 +114,31 @@ Ogni package ha un solo compito. I package driver MUST esporre un display con `i
 |---|---|---|
 | `device_name` | `display-garage` | hostname / nome del nodo |
 | `friendly_name` | `Display Garage` | nome mostrato in HA |
-| `soc_entity` | `sensor.solaredge_storage_level` | SOC in % (entità segnaposto, da verificare) |
-| `power_entity` | `sensor.solaredge_storage_power` | potenza della batteria in W (da verificare) |
+| `soc_entity` | `sensor.solaredge_livello_di_stoccaggio` | SOC in % (verificato in HA, entity_id in italiano) |
+| `power_entity` | `sensor.solaredge_potenza_immagazzinata` | potenza della batteria (in kW nell'integrazione cloud, verificato) |
 | `age_entity` | `sensor.solaredge_data_age` | età del dato in minuti (template HA) |
-| `power_invert` | `"false"` | `true` se l'integrazione usa un valore positivo per la scarica |
+| `power_scale` | `"1000.0"` | fattore per portare `power_entity` in W (l'integrazione cloud usa kW; `1.0` se è già in W) |
+| `power_invert` | `"true"` | `true` se l'integrazione usa un valore positivo per la scarica (così fa la cloud: carica negativa) |
 | `battery_capacity_kwh` | `30` | capacità utile |
 | `soc_green` / `soc_yellow` | `60` / `30` | soglie di colore in % |
 | `power_deadband_w` | `50` | sotto questo valore assoluto la batteria risulta "Ferma" |
 | `stale_after_min` | `30` | oltre questa età il dato è vecchio |
-| `backlight_pin` | `GPIO21` | da verificare sulla scheda |
+| `backlight_pin` | `GPIO21` | verificato sulla scheda |
+| `display_driver` | `mipi` | `mipi` oppure `ili9xxx` (fallback) |
 
 Convenzione interna: dopo l'applicazione di `power_invert`, **potenza > 0 = carica**.
 
 ### Componenti
 
-- **core.yaml**: `esp32` (`board: esp32dev`, framework ESP-IDF predefinito); `wifi` con credenziali da `secrets` e `ap` di fallback; `api` con `encryption.key` da `secrets`; `ota` (`platform: esphome`, password da `secrets`); `logger`; backlight come `output: ledc` sul `backlight_pin` più `light: monochromatic` "Retroilluminazione" (`restore_mode: RESTORE_DEFAULT_ON`).
-- **data.yaml**: tre `sensor: platform: homeassistant` (`batt_soc`, `batt_power`, `data_age`) collegati alle substitutions.
-- **display-mipi.yaml**: `platform: mipi_spi`, `model: ESP32-2432S028`, `rotation: 90`, `update_interval: 5s`, lambda che chiama `draw_ui(...)`. Il preset copre pin e init; `invert_colors` e `color_order` MAY richiedere una correzione dopo la verifica sulla scheda.
-- **display-ili9xxx.yaml**: `platform: ili9xxx`, `model: ILI9341` (alternativa `ILI9342`), bus `spi` esplicito (CLK 14, MOSI 13, MISO 12), CS 15, DC 2, stessa lambda.
-- **ui.yaml**: font (Roboto 700 a 90 px limitato ai glyph `0123456789%`; Roboto a 20 px), colori, `esphome: includes: [ui.h]`.
-- **Parametri verso il C++**: `ui.h` non vede le substitutions. Le lambda dei package driver le passano esplicitamente in una struct, per esempio `draw_ui(it, UiConfig{${soc_green}, ${soc_yellow}, ${power_deadband_w}, ${power_invert}, ${battery_capacity_kwh}, ${stale_after_min}});`. Font, colori e sensori si leggono tramite `id(...)`.
-- **ui.h**: `draw_ui(display::Display &it, const UiConfig &cfg)` suddivisa in due parti:
-  - `ui_state()`, logica pura che sceglie lo stato (vedi sotto);
-  - le funzioni di disegno per ciascuno stato.
+- **core.yaml**: `esp32` (`board: esp32dev`, framework ESP-IDF predefinito); `wifi` con credenziali da `secrets` e `ap` di fallback; `api` con `encryption.key` da `secrets`; `ota` (`platform: esphome`, `encryption: {}` che eredita la chiave dell'API); `logger`; backlight come `output: ledc` sul `backlight_pin` più `light: monochromatic` "Retroilluminazione" (`restore_mode: RESTORE_DEFAULT_ON`).
+- **touch.yaml**: bus SPI `touch_spi` (CLK 25, MOSI 32, MISO 39), `touchscreen: xpt2046` (CS 33, calibrazione tipica CYD: la posizione non viene usata). `on_touch` accende `backlight` sull'ESP e pubblica `on` su `binary_sensor` "Tocco"; `on_release` pubblica `off`; `on_boot` pubblica `off` per avere uno stato iniziale noto. Il bus del display si chiama `disp_spi`.
+- **data.yaml**: tre `sensor: platform: homeassistant` (`batt_soc`, `batt_power`, `data_age`) collegati alle substitutions; `batt_power` ha il filtro `multiply: ${power_scale}`, così il C++ lavora sempre in W.
+- **display-mipi.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: mipi_spi`, `model: ESP32-2432S028-7789` (ST7789, CS 15 e DC 2 nel preset), `color_order: bgr`, `invert_colors: false`, `rotation: 90`, `update_interval: 5s`, lambda che chiama `ui::draw_ui(...)`. Per la variante ILI9341 (FNK0103 F) si usa `model: ESP32-2432S028`.
+- **display-ili9xxx.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: ili9xxx`, `model: ST7789V`, `color_order: bgr`, `invert_colors: false`, CS 15, DC 2, stessa lambda.
+- **ui.yaml**: font (Roboto 700 a 90 px limitato ai glyph `0123456789%`; Roboto a 20 px), `esphome: includes: [ui_logic.h, ui.h]`.
+- **Parametri verso il C++**: `ui.h` non vede le substitutions né gli `id(...)`. La lambda passa tutto esplicitamente: `ui::draw_ui(it, ui::UiInputs{soc, soc_received, power_w, age_min, wifi_ok, api_ok}, ui::UiConfig{${soc_green}, ${soc_yellow}, ${power_deadband_w}, ${power_invert}, ${battery_capacity_kwh}, ${stale_after_min}}, id(font_big), id(font_small));`. La connessione si legge da `wifi::global_wifi_component->is_connected()` e da `api::global_api_server->is_connected()`.
+- **ui_logic.h**: logica pura, senza dipendenze da ESPHome: `screen_state()`, `soc_level()`, `power_flow()`, `clamp_soc()`, `available_kwh()`, `bar_fill_px()`, `has_age()`.
+- **ui.h**: `draw_ui(Display &it, const UiInputs &in, const UiConfig &cfg, Font *big, Font *small)`, con i colori (costanti `Color`) e le coordinate del layout.
 
 ### Layout (320×240, orizzontale)
 
@@ -142,7 +149,7 @@ Convenzione interna: dopo l'applicazione di `power_invert`, **potenza > 0 = cari
 │ ┌──────────────────────────────────────┐ │
 │ │██████████████████████████████░░░░░░░│ │  barra, stesso colore
 │ └──────────────────────────────────────┘ │
-│ 26.1 kWh disponibili       agg. 12 min fa │  riga info (20 px)
+│ 26.1 kWh                   agg. 12 min fa │  riga info (20 px)
 └──────────────────────────────────────────┘
 ```
 
@@ -155,15 +162,15 @@ Riga di stato:
 | entro la deadband | "Ferma", bianco |
 | potenza NaN / assente | lato sinistro vuoto |
 
-Se il font non contiene ▲▼● si SHOULD usare le icone MDI tramite glyph.
+▲▼● sono disegnati con primitive grafiche (`filled_triangle`, `filled_circle`), quindi non dipendono dai glyph del font. I testi sono in ASCII (niente "…" né lettere accentate).
 
 ### Key Flows: selezione dello stato (priorità decrescente)
 
 | # | Condizione | Resa |
 |---|---|---|
-| 1 | SOC mai ricevuto, oppure NaN (`unavailable`) | solo testo centrato "In attesa dati…" o "Dati non disponibili" |
+| 1 | SOC mai ricevuto, oppure NaN (`unavailable`) | solo testo centrato: "In attesa dati...", oppure "HA non connesso" / "WiFi non connesso" se manca la connessione (dopo il reboot automatico di ESPHome per timeout di 15 min non ci sono ultimi valori), oppure "Dati non disponibili" |
 | 2 | `!wifi.connected` oppure `!api.connected` | ultimi valori **in grigio**, pallino WiFi/HA rosso, in basso a destra "HA non connesso" |
-| 3 | `data_age > stale_after_min` | percentuale e barra **in grigio**, "agg. N min fa" in giallo |
+| 3 | `data_age > stale_after_min` | percentuale, barra, riga di stato e kWh **in grigio**, "agg. N min fa" in giallo |
 | 4 | altrimenti | normale, colori per soglia, pallini verdi |
 
 Lo stato 2 MUST essere rilevato dall'ESP: con l'API scollegata `data_age` smette di aggiornarsi. Se `data_age` è NaN l'età non viene mostrata e lo stato 3 non si applica.
@@ -187,14 +194,14 @@ Presupposto da verificare (vedi Test Strategy, I3): `last_reported` si aggiorna 
 
 **Automazione della retroilluminazione** (`homeassistant/automations/display-garage-backlight.yaml`):
 - Trigger "on": `binary_sensor.<reolink>_motion` passa a `on` → `light.turn_on` sulla retroilluminazione.
-- Trigger "off": lo stesso sensore resta `off` per 5 minuti → `light.turn_off`.
+- Trigger "quiete": movimento `off` da 5 minuti, oppure "Tocco" `off` da 5 minuti, oppure display acceso da 5 minuti. Condizione: movimento **e** tocco `off` da almeno 5 minuti → `light.turn_off`. Senza HA il display acceso da un tocco resta acceso (e mostra "HA non connesso").
 - `mode: restart`.
 - L'entità della telecamera è un segnaposto.
 
 ### Security
 
-- `esphome/secrets.yaml` MUST NOT essere committato (è in `.gitignore`); nel repo c'è solo `secrets.yaml.example` con `wifi_ssid`, `wifi_password`, `api_encryption_key`, `ota_password`, `ap_password`.
-- L'API ESPHome MUST usare la chiave di cifratura.
+- `esphome/secrets.yaml` MUST NOT essere committato (è in `.gitignore`); nel repo c'è solo `secrets.yaml.example` con `wifi_ssid`, `wifi_password`, `api_encryption_key`, `ap_password`.
+- L'API ESPHome MUST usare la chiave di cifratura; l'OTA usa la stessa chiave (`encryption: {}`).
 - L'accesso di Claude a HA avviene con un long-lived token fornito dal proprietario: in sola lettura per le verifiche; ogni scrittura (template, automazioni) MUST essere approvata prima. Il token MUST NOT essere scritto nel repo.
 
 ## Impact Analysis
@@ -203,7 +210,7 @@ Greenfield: sezione omessa.
 
 ## Test Strategy
 
-Non c'è logica applicativa testabile con coverage: la verifica si basa su validazione e compilazione della config, controlli su HA e una checklist sull'hardware.
+La logica pura (`ui_logic.h`) è coperta da `tests/test_ui_logic.cpp`, eseguito sul PC: gli Edge Cases 1–6 e la priorità degli stati negli Error Cases sono test automatici. Il resto si verifica con config e compilazione di entrambi i driver (`scripts/check.sh`, anche in CI), controlli su HA e la checklist sull'hardware.
 
 ### Happy Path
 
@@ -211,7 +218,7 @@ Non c'è logica applicativa testabile con coverage: la verifica si basa su valid
 |---|---|---|---|
 | 1 | Config valida (mipi) | `esphome config esphome/display-garage.yaml` | exit 0 |
 | 2 | Compilazione (mipi) | `esphome compile esphome/display-garage.yaml` | firmware generato |
-| 3 | Config + compilazione (fallback) | stessi comandi su `display-garage-ili9xxx.yaml` | exit 0, firmware generato |
+| 3 | Config + compilazione (fallback) | stessi comandi con `-s display_driver ili9xxx` | exit 0, firmware generato |
 | 4 | CI | push su GitHub | workflow verde su entrambe le varianti |
 | 5 | Stato normale sulla scheda | SOC 87%, carica 2.4 kW, età 5 min | layout come da mockup, verde, ▲ |
 
@@ -247,7 +254,7 @@ Non c'è logica applicativa testabile con coverage: la verifica si basa su valid
 | I4 | Automazione retroilluminazione | HA più telecamera Reolink | si accende al movimento e si spegne dopo 5 minuti |
 | H1 | Primo flash USB | scheda collegata al PC | `esphome run` va a buon fine, log seriale OK |
 | H2 | Retroilluminazione su GPIO21 | scheda | schermo acceso, dimmer da HA funzionante |
-| H3 | Modello e colori | scheda | immagine pulita, colori corretti (altrimenti si passa a `invert_colors`/`color_order`, poi a `-9342`, poi al fallback `ili9xxx`) |
+| H3 | Modello e colori | scheda | immagine pulita, colori corretti (controller dall'etichetta: B = ST7789, F = ILI9341; poi `invert_colors`/`color_order`; poi fallback `ili9xxx`) |
 | H4 | Rotazione | scheda | orizzontale e dritto |
 | H5 | Leggibilità | scheda a parete, 2–3 m | percentuale leggibile |
 | H6 | OTA | scheda su Wi-Fi | secondo flash via rete riuscito |
@@ -257,7 +264,7 @@ Non c'è logica applicativa testabile con coverage: la verifica si basa su valid
 1. Tooling: venv con CLI ESPHome, `secrets.yaml` locale a partire dall'esempio
 2. `core.yaml` + `display-mipi.yaml` + un `ui.h` minimale ("hello") → config e compile verdi
 3. `data.yaml` + `ui.yaml` + `ui.h` completo (stati 1–4, layout) → compile verde
-4. Fallback `display-ili9xxx.yaml` + `display-garage-ili9xxx.yaml` → compile verde
+4. Fallback `display-ili9xxx.yaml` selezionabile con `display_driver` → compile verde
 5. Workflow GitHub Actions
 6. File HA (template dell'età, automazione della retroilluminazione)
 7. README completo (primo flash, adattamento degli `entity_id`, troubleshooting)
@@ -269,14 +276,23 @@ Non c'è logica applicativa testabile con coverage: la verifica si basa su valid
 | Rischio | Impatto | Mitigazione |
 |---|---|---|
 | `mipi_spi` dà immagini corrotte sulla CYD 2,8" | display inutilizzabile | package di fallback `ili9xxx` già compilato in CI |
-| Pinout Freenove diverso dallo standard ESP32-2432S028 | schermo nero | verifica H1–H3 sulla scheda, pin ridefinibili nel package |
+| Variante del controller diversa da quella attesa | immagine corrotta | verificata: FNK0103 B = ST7789; la variante F (ILI9341) è documentata nel package e nel README |
 | `last_reported` non si aggiorna senza cambio di valore | falso "dato vecchio" | verifica I3; alternativa: età basata sull'attributo o sul sensore di ultimo aggiornamento dell'integrazione |
 | Cloud SolarEdge fuori servizio | entità `unavailable` | stato 1 o 3, mai un valore fuorviante in colore pieno |
 | Breaking change di ESPHome | la build fallisce | CI su ogni push; versione di ESPHome annotata nel README |
-| Glyph ▲▼● assenti in Roboto | simboli non visualizzati | icone MDI tramite glyph |
 
 ## Open Questions
 
-- Pinout effettivo della Freenove 2,8" (backlight GPIO21, preset `ESP32-2432S028` compatibile?) → da risolvere con H1–H3
-- `entity_id` reali e segno della potenza → I1–I2
-- Entità del sensore di movimento Reolink → I4
+- Nessuna aperta. Restano da verificare I4 (accensione e spegnimento automatici al movimento) e H5 (leggibilità a parete).
+
+## Implementation Notes (2026-09-25)
+
+- **Scheda reale**: l'etichetta riporta "Freenove ESP32 Display FNK0103 B A1B0 — 2.8 Inch ST7789 TN 240x320 Touch". esptool: ESP32-D0WD-V3 rev 3.1, flash da 4 MB, niente PSRAM, CH340 sulla COM5.
+- **Primo flash con il preset ILI9341**: immagine ripetuta e schiacciata, schermo aggiornato solo in parte, fondo chiaro. Con `ESP32-2432S028-7789` + `color_order: bgr` + `invert_colors: false` (coerente con il setup TFT_eSPI di Freenove FNK0114B) l'immagine è corretta.
+- **Esiti hardware**: H1 ✔ (flash USB), H2 ✔ (retroilluminazione su GPIO21), H3 ✔, H4 ✔ (orizzontale, pallini verde e rosso corretti), H6 ✔ (OTA verso `display-garage.local`). Restano H5 (leggibilità a parete) e il controllo del dimmer da HA.
+- **Toolchain Windows**: l'installer ESP-IDF rifiuta MSYS (Git Bash) e fallisce su percorsi lunghi. `scripts/check.sh` imposta `ESPHOME_ESP_IDF_PREFIX=C:/ESPHome/idf` e toglie `MSYSTEM`.
+- **Layout**: pallini WiFi/HA spostati di 10 px a sinistra perché "HA" toccava il bordo destro.
+- **Home Assistant (I1–I3)**: HA 2026.8.3. SOC `sensor.solaredge_livello_di_stoccaggio` (%), potenza `sensor.solaredge_potenza_immagazzinata` (**kW**), movimento `binary_sensor.garage_movimento`. Con FV 4.79 kW, consumo 0.72 kW e rete −0.15 kW, la potenza storage valeva −3.92 kW, quindi la carica è **negativa** (`power_scale: 1000`, `power_invert: true`). `last_reported` si aggiorna anche senza cambi di valore (per esempio `sensor.solaredge_metri`: reported il 23/09, changed il 21/09).
+- **Scritture su HA (approvate dal proprietario)**: integrazione ESPHome "Display Garage", helper template `sensor.solaredge_data_age` (creato dall'interfaccia, senza availability template: se manca la sorgente il template dà errore e l'età risulta assente), automazione `display_garage_backlight`.
+- **Happy Path 5 ✔**: con SOC 25% e carica di 4.0 kW il display mostra "▲ In carica 4.0 kW" in verde, 25% e barra in rosso, "7.5 kWh", "agg. 0 min fa", pallini WiFi e HA verdi.
+- **Chiave API d'esempio**: ESPHome 2026.9 rifiuta la chiave tutta zeri. L'esempio ha un segnaposto non valido e la CI genera una chiave casuale.

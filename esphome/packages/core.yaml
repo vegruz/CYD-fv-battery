@@ -1,0 +1,40 @@
+# Piattaforma, rete, API/OTA e retroilluminazione.
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption: {}   # eredita la chiave di 'api': OTA cifrato e autenticato
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+output:
+  - platform: ledc
+    pin: ${backlight_pin}
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Retroilluminazione"
+    id: backlight
+    restore_mode: RESTORE_DEFAULT_ON

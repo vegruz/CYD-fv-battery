@@ -1,0 +1,30 @@
+# Display Garage – stato accumulo SolarEdge su CYD 2,8".
+# Tutti i parametri modificabili sono qui. Spec: specs/2026-09-25-display-garage-design.md
+substitutions:
+  device_name: display-garage
+  friendly_name: Display Garage
+
+  # Entità Home Assistant (verificare in Strumenti per sviluppatori → Stati)
+  soc_entity: sensor.solaredge_livello_di_stoccaggio
+  power_entity: sensor.solaredge_potenza_immagazzinata
+  age_entity: sensor.solaredge_data_age   # template in homeassistant/templates/
+
+  # Integrazione SolarEdge cloud: potenza in kW, carica NEGATIVA, scarica positiva.
+  power_scale: "1000.0"      # 1000.0 se power_entity è in kW, 1.0 se è in W
+  power_invert: "true"       # "true" se l'integrazione riporta la SCARICA come potenza positiva
+
+  battery_capacity_kwh: "30.0"
+  soc_green: "60.0"          # % minima per il verde
+  soc_yellow: "30.0"         # % minima per il giallo
+  power_deadband_w: "50.0"   # sotto questa potenza (assoluta) la batteria è "Ferma"
+  stale_after_min: "30.0"    # oltre questa età il dato è mostrato in grigio
+
+  backlight_pin: GPIO21
+  display_driver: mipi       # fallback: ili9xxx (packages/display-ili9xxx.yaml)
+
+packages:
+  core: !include packages/core.yaml
+  data: !include packages/data.yaml
+  ui: !include packages/ui.yaml
+  touch: !include packages/touch.yaml
+  display: !include packages/display-${display_driver}.yaml

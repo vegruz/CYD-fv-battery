@@ -20,3 +20,12 @@ venv/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Test build
+build/
+
+# Superpowers workspace
+.superpowers/
+
+#HA
+ha-long-lived-token.txt
