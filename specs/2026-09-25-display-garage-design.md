@@ -5,7 +5,7 @@
 | Campo | Valore |
 |---|---|
 | Author | vegruz (con Claude Code) |
-| Status | In Review |
+| Status | Approved |
 | Date | 2026-09-25 |
 | ADR correlato | — (decisione inclusa nella sezione Decision) |
 | Handoff di origine | [`docs/display-garage-cyd.md`](../docs/display-garage-cyd.md) |
