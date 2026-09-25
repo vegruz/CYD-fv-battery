@@ -112,8 +112,8 @@ Ogni package ha un solo compito. Il driver si sceglie con la substitution `displ
 |---|---|---|
 | `device_name` | `display-garage` | hostname / nome del nodo |
 | `friendly_name` | `Display Garage` | nome mostrato in HA |
-| `soc_entity` | `sensor.solaredge_storage_level` | SOC in % (entità segnaposto, da verificare) |
-| `power_entity` | `sensor.solaredge_storage_power` | potenza della batteria in W (da verificare) |
+| `soc_entity` | `sensor.solaredge_livello_di_stoccaggio` | SOC in % (verificato in HA, entity_id in italiano) |
+| `power_entity` | `sensor.solaredge_potenza_immagazzinata` | potenza della batteria (in kW nell'integrazione cloud, verificato) |
 | `age_entity` | `sensor.solaredge_data_age` | età del dato in minuti (template HA) |
 | `power_scale` | `"1000.0"` | fattore per portare `power_entity` in W (l'integrazione cloud usa kW; `1.0` se è già in W) |
 | `power_invert` | `"true"` | `true` se l'integrazione usa un valore positivo per la scarica (così fa la cloud: carica negativa) |
@@ -280,8 +280,7 @@ La logica pura (`ui_logic.h`) è coperta da `tests/test_ui_logic.cpp`, eseguito 
 
 ## Open Questions
 
-- `entity_id` reali e segno della potenza → I1–I2
-- Entità del sensore di movimento Reolink → I4
+- Nessuna aperta. Restano da verificare I4 (accensione e spegnimento automatici al movimento) e H5 (leggibilità a parete).
 
 ## Implementation Notes (2026-09-25)
 
@@ -290,3 +289,7 @@ La logica pura (`ui_logic.h`) è coperta da `tests/test_ui_logic.cpp`, eseguito 
 - **Esiti hardware**: H1 ✔ (flash USB), H2 ✔ (retroilluminazione su GPIO21), H3 ✔, H4 ✔ (orizzontale, pallini verde e rosso corretti), H6 ✔ (OTA verso `display-garage.local`). Restano H5 (leggibilità a parete) e il controllo del dimmer da HA.
 - **Toolchain Windows**: l'installer ESP-IDF rifiuta MSYS (Git Bash) e fallisce su percorsi lunghi. `scripts/check.sh` imposta `ESPHOME_ESP_IDF_PREFIX=C:/ESPHome/idf` e toglie `MSYSTEM`.
 - **Layout**: pallini WiFi/HA spostati di 10 px a sinistra perché "HA" toccava il bordo destro.
+- **Home Assistant (I1–I3)**: HA 2026.8.3. SOC `sensor.solaredge_livello_di_stoccaggio` (%), potenza `sensor.solaredge_potenza_immagazzinata` (**kW**), movimento `binary_sensor.garage_movimento`. Con FV 4.79 kW, consumo 0.72 kW e rete −0.15 kW, la potenza storage valeva −3.92 kW, quindi la carica è **negativa** (`power_scale: 1000`, `power_invert: true`). `last_reported` si aggiorna anche senza cambi di valore (per esempio `sensor.solaredge_metri`: reported il 23/09, changed il 21/09).
+- **Scritture su HA (approvate dal proprietario)**: integrazione ESPHome "Display Garage", helper template `sensor.solaredge_data_age` (creato dall'interfaccia, senza availability template: se manca la sorgente il template dà errore e l'età risulta assente), automazione `display_garage_backlight`.
+- **Happy Path 5 ✔**: con SOC 25% e carica di 4.0 kW il display mostra "▲ In carica 4.0 kW" in verde, 25% e barra in rosso, "7.5 kWh", "agg. 0 min fa", pallini WiFi e HA verdi.
+- **Chiave API d'esempio**: ESPHome 2026.9 rifiuta la chiave tutta zeri. L'esempio ha un segnaposto non valido e la CI genera una chiave casuale.
