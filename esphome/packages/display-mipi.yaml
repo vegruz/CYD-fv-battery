@@ -1,0 +1,19 @@
+# Driver default: preset CYD 2,8" (ILI9341, CS 15, DC 2 già nel preset).
+spi:
+  clk_pin: GPIO14
+  mosi_pin: GPIO13
+
+display:
+  - platform: mipi_spi
+    id: disp
+    model: ESP32-2432S028
+    rotation: 90
+    update_interval: 5s
+    lambda: |-
+      ui::draw_ui(it,
+          ui::UiInputs{id(batt_soc).state, id(batt_soc).has_state(), id(batt_power).state,
+                       id(data_age).state, wifi::global_wifi_component->is_connected(),
+                       api::global_api_server->is_connected()},
+          ui::UiConfig{${soc_green}, ${soc_yellow}, ${power_deadband_w}, ${power_invert},
+                       ${battery_capacity_kwh}, ${stale_after_min}},
+          id(font_big), id(font_small));

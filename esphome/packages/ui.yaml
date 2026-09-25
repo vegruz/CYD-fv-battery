@@ -1,0 +1,20 @@
+# Codice di rendering e font. I percorsi degli include sono relativi a esphome/.
+esphome:
+  includes:
+    - ui_logic.h
+    - ui.h
+
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: font_big
+    size: 90
+    glyphs: "0123456789%"
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 400
+    id: font_small
+    size: 20
