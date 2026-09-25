@@ -1,0 +1,15 @@
+# Età in minuti dell'ultima lettura SolarEdge. Usa last_reported, aggiornato a ogni
+# lettura dell'integrazione anche se il valore non cambia. Si ricalcola ogni minuto (now()).
+# Installazione: incollare in configuration.yaml (o in un file di package), oppure
+# creare un helper Template → Sensore dall'interfaccia con lo stesso template di stato.
+template:
+  - sensor:
+      - name: "SolarEdge data age"
+        unique_id: solaredge_data_age
+        unit_of_measurement: "min"
+        state_class: measurement
+        icon: mdi:timer-sand
+        availability: "{{ states.sensor.solaredge_storage_level is not none }}"
+        state: >
+          {{ ((now() - states.sensor.solaredge_storage_level.last_reported)
+              .total_seconds() / 60) | round(0) }}
