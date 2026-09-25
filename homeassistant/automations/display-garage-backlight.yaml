@@ -1,16 +1,15 @@
 # Accende il display al movimento rilevato dalla telecamera Reolink del garage e lo spegne
-# dopo 5 minuti senza movimento. SEGNAPOSTO: binary_sensor.garage_camera_motion
-# (sostituire con l'entità di movimento reale della Reolink).
+# dopo 5 minuti senza movimento (sensore di movimento della Reolink "Garage").
 alias: "Display garage - retroilluminazione su movimento"
 description: "Accende il display garage al movimento, spegne dopo 5 minuti di quiete."
 mode: restart
 triggers:
   - trigger: state
-    entity_id: binary_sensor.garage_camera_motion
+    entity_id: binary_sensor.garage_movimento
     to: "on"
     id: movimento
   - trigger: state
-    entity_id: binary_sensor.garage_camera_motion
+    entity_id: binary_sensor.garage_movimento
     to: "off"
     for:
       minutes: 5

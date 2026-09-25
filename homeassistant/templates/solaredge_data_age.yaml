@@ -9,7 +9,7 @@ template:
         unit_of_measurement: "min"
         state_class: measurement
         icon: mdi:timer-sand
-        availability: "{{ states.sensor.solaredge_storage_level is not none }}"
+        availability: "{{ states.sensor.solaredge_livello_di_stoccaggio is not none }}"
         state: >
-          {{ ((now() - states.sensor.solaredge_storage_level.last_reported)
+          {{ ((now() - states.sensor.solaredge_livello_di_stoccaggio.last_reported)
               .total_seconds() / 60) | round(0) }}
