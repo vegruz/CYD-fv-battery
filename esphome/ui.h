@@ -38,10 +38,10 @@ inline Color level_color(Level level) {
 }
 
 inline void draw_links(Display &it, const UiInputs &in, Font *small) {
-  it.filled_circle(226, ROW_TOP_Y, 5, in.wifi_ok ? C_GREEN : C_RED);
-  it.print(234, ROW_TOP_Y, small, C_TEXT, TextAlign::CENTER_LEFT, "WiFi");
-  it.filled_circle(284, ROW_TOP_Y, 5, in.api_ok ? C_GREEN : C_RED);
-  it.print(292, ROW_TOP_Y, small, C_TEXT, TextAlign::CENTER_LEFT, "HA");
+  it.filled_circle(216, ROW_TOP_Y, 5, in.wifi_ok ? C_GREEN : C_RED);
+  it.print(224, ROW_TOP_Y, small, C_TEXT, TextAlign::CENTER_LEFT, "WiFi");
+  it.filled_circle(274, ROW_TOP_Y, 5, in.api_ok ? C_GREEN : C_RED);
+  it.print(282, ROW_TOP_Y, small, C_TEXT, TextAlign::CENTER_LEFT, "HA");
 }
 
 inline void draw_flow(Display &it, const UiInputs &in, const UiConfig &cfg, Font *small, bool muted) {
