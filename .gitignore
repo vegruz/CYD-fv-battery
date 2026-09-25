@@ -1,0 +1,22 @@
+# ESPHome
+secrets.yaml
+.esphome/
+**/.esphome/
+.pioenvs/
+.piolibdeps/
+.pio/
+*.bin
+*.elf
+
+# Python / tooling
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
