@@ -1,0 +1,41 @@
+# Touch resistivo XPT2046 (bus SPI dedicato, pin dallo sketch Freenove FNK0103).
+# Serve solo a "svegliare" il display: un tocco qualsiasi accende la retroilluminazione
+# direttamente sull'ESP; lo spegnimento lo decide l'automazione HA (5 min senza movimento né tocchi).
+esphome:
+  on_boot:
+    # Stato iniziale noto: l'automazione HA richiede "Tocco" off da 5 min per spegnere.
+    - binary_sensor.template.publish:
+        id: touch_active
+        state: false
+
+spi:
+  - id: touch_spi
+    clk_pin: GPIO25
+    mosi_pin: GPIO32
+    miso_pin: GPIO39
+
+touchscreen:
+  - platform: xpt2046
+    id: touch
+    spi_id: touch_spi
+    cs_pin: GPIO33
+    # Calibrazione tipica CYD: la posizione non viene usata, basta rilevare il tocco.
+    calibration:
+      x_min: 280
+      x_max: 3860
+      y_min: 340
+      y_max: 3860
+    on_touch:
+      - light.turn_on: backlight
+      - binary_sensor.template.publish:
+          id: touch_active
+          state: true
+    on_release:
+      - binary_sensor.template.publish:
+          id: touch_active
+          state: false
+
+binary_sensor:
+  - platform: template
+    id: touch_active
+    name: "Tocco"

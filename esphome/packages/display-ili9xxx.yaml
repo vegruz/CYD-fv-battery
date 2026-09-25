@@ -1,12 +1,14 @@
 # Fallback se mipi_spi dà immagini corrotte. ili9xxx è deprecata: usare solo se serve.
 # Attivare con  substitutions: display_driver: ili9xxx  (o  esphome -s display_driver ili9xxx ...)
 spi:
-  clk_pin: GPIO14
-  mosi_pin: GPIO13
+  - id: disp_spi
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
 
 display:
   - platform: ili9xxx
     id: disp
+    spi_id: disp_spi
     model: ST7789V            # variante ILI9341 (FNK0114F): ILI9341
     color_order: bgr
     cs_pin: GPIO15

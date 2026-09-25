@@ -74,7 +74,8 @@ tests/, scripts/              # test logica UI, verifica completa
    SolarEdge mentre la batteria carica; se l'entità è in W usare `power_scale: "1.0"`, se è positiva in carica
    `power_invert: "false"`.
 5. **Automazione retroilluminazione**: importare `homeassistant/automations/display-garage-backlight.yaml`
-   sostituendo `binary_sensor.garage_camera_motion` con il sensore di movimento della Reolink.
+   (sensore di movimento della Reolink `binary_sensor.garage_movimento`). Il display si accende al movimento
+   o **al tocco dello schermo** e si spegne dopo 5 minuti senza movimento né tocchi.
 
 ## Primo flash (USB)
 

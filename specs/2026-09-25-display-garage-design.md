@@ -69,6 +69,7 @@ Inverter SolarEdge ──(cloud SE, ~15 min)──> HA (integrazione SolarEdge c
 - G5: mostrare l'età del dato ("agg. N min fa") e segnalarlo come vecchio oltre `stale_after_min`
 - G6: segnalare la disconnessione di Wi-Fi e dell'API HA
 - G7: retroilluminazione comandata da HA: accesa al movimento rilevato dalla telecamera Reolink, spenta dopo 5 minuti senza movimento
+- G9: un tocco qualsiasi sullo schermo accende la retroilluminazione (anche senza HA); ogni tocco sposta lo spegnimento automatico di 5 minuti
 - G8: configurazione parametrica (entità, soglie, capacità, segno della potenza) tramite `substitutions`, senza toccare il C++
 
 ### Non-goals
@@ -76,7 +77,7 @@ Inverter SolarEdge ──(cloud SE, ~15 min)──> HA (integrazione SolarEdge c
 - Scheda Freenove 3,2" (ordine annullato)
 - Integrazione SolarEdge Modbus locale
 - Consiglio "CARICA ORA / ASPETTA"
-- Touch, LVGL, comandi di ricarica
+- Interfaccia touch (pagine, pulsanti), LVGL, comandi di ricarica: il touch serve solo a risvegliare il display
 - Anteprima grafica su PC (piattaforma `host` con SDL)
 
 ## Design
@@ -93,6 +94,7 @@ esphome/
 │   ├── data.yaml                  # sensori homeassistant (SOC, potenza, età dato)
 │   ├── display-mipi.yaml          # mipi_spi, preset ESP32-2432S028-7789 (default)
 │   ├── display-ili9xxx.yaml       # fallback ili9xxx, stesso id e stessa lambda
+│   ├── touch.yaml                 # XPT2046 su bus SPI dedicato: tocco → accende, sensore "Tocco" per HA
 │   └── ui.yaml                    # font, include di ui_logic.h e ui.h
 └── secrets.yaml.example
 homeassistant/
@@ -129,6 +131,7 @@ Convenzione interna: dopo l'applicazione di `power_invert`, **potenza > 0 = cari
 ### Componenti
 
 - **core.yaml**: `esp32` (`board: esp32dev`, framework ESP-IDF predefinito); `wifi` con credenziali da `secrets` e `ap` di fallback; `api` con `encryption.key` da `secrets`; `ota` (`platform: esphome`, `encryption: {}` che eredita la chiave dell'API); `logger`; backlight come `output: ledc` sul `backlight_pin` più `light: monochromatic` "Retroilluminazione" (`restore_mode: RESTORE_DEFAULT_ON`).
+- **touch.yaml**: bus SPI `touch_spi` (CLK 25, MOSI 32, MISO 39), `touchscreen: xpt2046` (CS 33, calibrazione tipica CYD: la posizione non viene usata). `on_touch` accende `backlight` sull'ESP e pubblica `on` su `binary_sensor` "Tocco"; `on_release` pubblica `off`; `on_boot` pubblica `off` per avere uno stato iniziale noto. Il bus del display si chiama `disp_spi`.
 - **data.yaml**: tre `sensor: platform: homeassistant` (`batt_soc`, `batt_power`, `data_age`) collegati alle substitutions; `batt_power` ha il filtro `multiply: ${power_scale}`, così il C++ lavora sempre in W.
 - **display-mipi.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: mipi_spi`, `model: ESP32-2432S028-7789` (ST7789, CS 15 e DC 2 nel preset), `color_order: bgr`, `invert_colors: false`, `rotation: 90`, `update_interval: 5s`, lambda che chiama `ui::draw_ui(...)`. Per la variante ILI9341 (FNK0103 F) si usa `model: ESP32-2432S028`.
 - **display-ili9xxx.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: ili9xxx`, `model: ST7789V`, `color_order: bgr`, `invert_colors: false`, CS 15, DC 2, stessa lambda.
@@ -191,7 +194,7 @@ Presupposto da verificare (vedi Test Strategy, I3): `last_reported` si aggiorna 
 
 **Automazione della retroilluminazione** (`homeassistant/automations/display-garage-backlight.yaml`):
 - Trigger "on": `binary_sensor.<reolink>_motion` passa a `on` → `light.turn_on` sulla retroilluminazione.
-- Trigger "off": lo stesso sensore resta `off` per 5 minuti → `light.turn_off`.
+- Trigger "quiete": movimento `off` da 5 minuti, oppure "Tocco" `off` da 5 minuti, oppure display acceso da 5 minuti. Condizione: movimento **e** tocco `off` da almeno 5 minuti → `light.turn_off`. Senza HA il display acceso da un tocco resta acceso (e mostra "HA non connesso").
 - `mode: restart`.
 - L'entità della telecamera è un segnaposto.
 

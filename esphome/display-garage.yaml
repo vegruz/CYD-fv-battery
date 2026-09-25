@@ -26,4 +26,5 @@ packages:
   core: !include packages/core.yaml
   data: !include packages/data.yaml
   ui: !include packages/ui.yaml
+  touch: !include packages/touch.yaml
   display: !include packages/display-${display_driver}.yaml
