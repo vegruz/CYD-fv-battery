@@ -20,3 +20,9 @@ venv/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Test build
+build/
+
+# Superpowers workspace
+.superpowers/
