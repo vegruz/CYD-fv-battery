@@ -1,5 +1,7 @@
 # Accende il display al movimento rilevato dalla telecamera Reolink del garage e lo spegne
 # dopo 5 minuti senza movimento (sensore di movimento della Reolink "Garage").
+# Il secondo trigger "quiete" copre i casi in cui il display si accende senza movimento
+# (riavvio del display con restore ON, accensione manuale): spento dopo 5 min se non c'è movimento.
 alias: "Display garage - retroilluminazione su movimento"
 description: "Accende il display garage al movimento, spegne dopo 5 minuti di quiete."
 mode: restart
@@ -11,6 +13,12 @@ triggers:
   - trigger: state
     entity_id: binary_sensor.garage_movimento
     to: "off"
+    for:
+      minutes: 5
+    id: quiete
+  - trigger: state
+    entity_id: light.display_garage_retroilluminazione
+    to: "on"
     for:
       minutes: 5
     id: quiete
@@ -26,6 +34,9 @@ actions:
       - conditions:
           - condition: trigger
             id: quiete
+          - condition: state
+            entity_id: binary_sensor.garage_movimento
+            state: "off"
         sequence:
           - action: light.turn_off
             target:
