@@ -19,7 +19,7 @@ sh scripts/test-logic.sh
 DRIVERS="${*:-mipi ili9xxx}"
 for driver in $DRIVERS; do
   echo "== ESPHome: display_driver=$driver =="
-  "$ESPHOME" -s display_driver "$driver" config esphome/display-garage.yaml > /dev/null
+  # compile valida anche la configurazione e ne stampa gli errori
   "$ESPHOME" -s display_driver "$driver" compile esphome/display-garage.yaml
 done
 echo "check OK: $DRIVERS"

@@ -15,8 +15,10 @@ jobs:
           cache: pip
       - name: Install ESPHome
         run: pip install -r requirements.txt
-      - name: Dummy secrets
-        run: cp esphome/secrets.yaml.example esphome/secrets.yaml
+      - name: Throwaway secrets (random API key, never used on a device)
+        run: |
+          KEY=$(python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())")
+          sed -e "s|^api_encryption_key: .*|api_encryption_key: \"$KEY\"|" esphome/secrets.yaml.example > esphome/secrets.yaml
       - name: Cache toolchains
         uses: actions/cache@v4
         with:
