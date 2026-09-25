@@ -75,7 +75,7 @@ inline void draw_ui(Display &it, const UiInputs &in, const UiConfig &cfg, Font *
 
   if (screen == Screen::WAITING || screen == Screen::UNAVAILABLE) {
     it.print(w / 2, h / 2, small, C_TEXT, TextAlign::CENTER,
-             screen == Screen::WAITING ? "In attesa dati..." : "Dati non disponibili");
+             screen == Screen::WAITING ? waiting_text(in) : "Dati non disponibili");
     return;
   }
 

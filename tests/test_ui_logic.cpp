@@ -1,6 +1,7 @@
 // Test su PC della logica UI (esphome/ui_logic.h). Eseguire con scripts/test-logic.sh.
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "ui_logic.h"
 
@@ -107,7 +108,19 @@ static void test_screen_state() {
   CHECK(screen_state(in, CFG) == Screen::NORMAL);
 }
 
+static void test_waiting_text() {
+  // Senza dati: il testo spiega il motivo (dopo un reboot per timeout la scheda non ha valori)
+  UiInputs in = normal_inputs();
+  in.soc_received = false;
+  CHECK(std::strcmp(waiting_text(in), "In attesa dati...") == 0);
+  in.api_ok = false;
+  CHECK(std::strcmp(waiting_text(in), "HA non connesso") == 0);
+  in.wifi_ok = false;
+  CHECK(std::strcmp(waiting_text(in), "WiFi non connesso") == 0);
+}
+
 int main() {
+  test_waiting_text();
   test_soc_level();
   test_power_flow();
   test_clamp_and_derived();

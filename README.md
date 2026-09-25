@@ -26,7 +26,7 @@ Design: [`specs/2026-09-25-display-garage-design.md`](specs/2026-09-25-display-g
 |---|---|
 | Nessun dato dall'avvio | "In attesa dati..." (se il pallino HA è verde: `entity_id` sbagliato) |
 | SOC `unavailable` in HA | "Dati non disponibili" |
-| Wi-Fi o HA scollegati | valori in grigio, pallino rosso, "HA non connesso" / "WiFi non connesso" |
+| Wi-Fi o HA scollegati | valori in grigio, pallino rosso, "HA non connesso" / "WiFi non connesso" (dopo 15 min ESPHome riavvia la scheda: resta solo il messaggio) |
 | Dato più vecchio di 30 min | valori in grigio, "agg. N min fa" in giallo |
 
 ## Hardware
@@ -64,12 +64,16 @@ tests/, scripts/              # test logica UI, verifica completa
 1. **Template età del dato**: copiare `homeassistant/templates/solaredge_data_age.yaml` in
    `configuration.yaml`, oppure creare un helper *Template → Sensore* con lo stesso template di stato.
    Deve comparire `sensor.solaredge_data_age` (minuti).
-2. **Adattare gli `entity_id`**: in *Strumenti per sviluppatori → Stati* cercare `solaredge` e
+2. **Abilitare le entità storage**: nell'integrazione SolarEdge le entità *Storage level* e *Storage power*
+   sono **disabilitate di default**: abilitarle (Impostazioni → Dispositivi → SolarEdge → entità nascoste/disabilitate).
+3. **Adattare gli `entity_id`**: in *Strumenti per sviluppatori → Stati* cercare `solaredge` e
    annotare l'entità del livello batteria (%) e quella della potenza batteria (W). Se sono diverse
    dai default, modificarle in `esphome/display-garage.yaml` (`soc_entity`, `power_entity`) e nel template.
-3. **Segno della potenza**: mentre l'app SolarEdge mostra la batteria in carica, controllare il segno
-   di `power_entity`. Se è negativo in carica, impostare `power_invert: "true"`.
-4. **Automazione retroilluminazione**: importare `homeassistant/automations/display-garage-backlight.yaml`
+4. **Unità e segno della potenza**: l'integrazione cloud riporta la potenza storage in **kW** con la
+   carica **negativa**: i default sono `power_scale: "1000.0"` e `power_invert: "true"`. Verificare con l'app
+   SolarEdge mentre la batteria carica; se l'entità è in W usare `power_scale: "1.0"`, se è positiva in carica
+   `power_invert: "false"`.
+5. **Automazione retroilluminazione**: importare `homeassistant/automations/display-garage-backlight.yaml`
    sostituendo `binary_sensor.garage_camera_motion` con il sensore di movimento della Reolink.
 
 ## Primo flash (USB)
@@ -106,7 +110,8 @@ La stessa verifica gira in CI (GitHub Actions) a ogni push.
 | Rosso e blu scambiati | ordine colori | `color_order: rgb` al posto di `bgr` |
 | Immagine capovolta | rotazione | `rotation: 270` |
 | Immagine corrotta con `mipi_spi` | driver | fallback `display_driver: ili9xxx` |
-| "In attesa dati..." con pallino HA verde | `entity_id` inesistente | correggere `soc_entity` |
+| "In attesa dati..." con pallino HA verde | entità storage disabilitata o `entity_id` inesistente | abilitare l'entità in HA, correggere `soc_entity` |
+| Sempre "Ferma" anche in carica | potenza in kW letta come W | `power_scale: "1000.0"` |
 | Età sempre assente | template non creato | vedi Setup HA punto 1 |
-| Carica/scarica invertite | segno della potenza | `power_invert: "true"` |
+| Carica/scarica invertite | segno della potenza | invertire `power_invert` |
 | Build Windows: `MSys/Mingw is not supported` o `bits/c++config.h` mancante | MSYS / percorso lungo | usare `scripts/check.sh` o impostare `ESPHOME_ESP_IDF_PREFIX` |

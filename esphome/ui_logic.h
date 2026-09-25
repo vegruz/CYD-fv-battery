@@ -43,6 +43,14 @@ inline Screen screen_state(const UiInputs &in, const UiConfig &cfg) {
   return Screen::NORMAL;
 }
 
+// Testo della schermata WAITING: dopo un reboot per timeout di API/WiFi non ci sono
+// ultimi valori da mostrare in grigio, quindi si spiega il motivo dell'attesa.
+inline const char *waiting_text(const UiInputs &in) {
+  if (!in.wifi_ok) return "WiFi non connesso";
+  if (!in.api_ok) return "HA non connesso";
+  return "In attesa dati...";
+}
+
 inline Level soc_level(float soc, const UiConfig &cfg) {
   if (soc >= cfg.soc_green) return Level::GREEN;
   if (soc >= cfg.soc_yellow) return Level::YELLOW;

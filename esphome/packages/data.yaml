@@ -6,6 +6,8 @@ sensor:
   - platform: homeassistant
     id: batt_power
     entity_id: ${power_entity}
+    filters:
+      - multiply: ${power_scale}   # converte in W (il firmware ragiona in W)
   - platform: homeassistant
     id: data_age
     entity_id: ${age_entity}

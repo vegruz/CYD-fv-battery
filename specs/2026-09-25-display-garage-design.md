@@ -115,7 +115,8 @@ Ogni package ha un solo compito. Il driver si sceglie con la substitution `displ
 | `soc_entity` | `sensor.solaredge_storage_level` | SOC in % (entità segnaposto, da verificare) |
 | `power_entity` | `sensor.solaredge_storage_power` | potenza della batteria in W (da verificare) |
 | `age_entity` | `sensor.solaredge_data_age` | età del dato in minuti (template HA) |
-| `power_invert` | `"false"` | `true` se l'integrazione usa un valore positivo per la scarica |
+| `power_scale` | `"1000.0"` | fattore per portare `power_entity` in W (l'integrazione cloud usa kW; `1.0` se è già in W) |
+| `power_invert` | `"true"` | `true` se l'integrazione usa un valore positivo per la scarica (così fa la cloud: carica negativa) |
 | `battery_capacity_kwh` | `30` | capacità utile |
 | `soc_green` / `soc_yellow` | `60` / `30` | soglie di colore in % |
 | `power_deadband_w` | `50` | sotto questo valore assoluto la batteria risulta "Ferma" |
@@ -128,7 +129,7 @@ Convenzione interna: dopo l'applicazione di `power_invert`, **potenza > 0 = cari
 ### Componenti
 
 - **core.yaml**: `esp32` (`board: esp32dev`, framework ESP-IDF predefinito); `wifi` con credenziali da `secrets` e `ap` di fallback; `api` con `encryption.key` da `secrets`; `ota` (`platform: esphome`, `encryption: {}` che eredita la chiave dell'API); `logger`; backlight come `output: ledc` sul `backlight_pin` più `light: monochromatic` "Retroilluminazione" (`restore_mode: RESTORE_DEFAULT_ON`).
-- **data.yaml**: tre `sensor: platform: homeassistant` (`batt_soc`, `batt_power`, `data_age`) collegati alle substitutions.
+- **data.yaml**: tre `sensor: platform: homeassistant` (`batt_soc`, `batt_power`, `data_age`) collegati alle substitutions; `batt_power` ha il filtro `multiply: ${power_scale}`, così il C++ lavora sempre in W.
 - **display-mipi.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: mipi_spi`, `model: ESP32-2432S028-7789` (ST7789, CS 15 e DC 2 nel preset), `color_order: bgr`, `invert_colors: false`, `rotation: 90`, `update_interval: 5s`, lambda che chiama `ui::draw_ui(...)`. Per la variante ILI9341 (FNK0103 F) si usa `model: ESP32-2432S028`.
 - **display-ili9xxx.yaml**: bus `spi` (CLK 14, MOSI 13); `platform: ili9xxx`, `model: ST7789V`, `color_order: bgr`, `invert_colors: false`, CS 15, DC 2, stessa lambda.
 - **ui.yaml**: font (Roboto 700 a 90 px limitato ai glyph `0123456789%`; Roboto a 20 px), `esphome: includes: [ui_logic.h, ui.h]`.
@@ -164,9 +165,9 @@ Riga di stato:
 
 | # | Condizione | Resa |
 |---|---|---|
-| 1 | SOC mai ricevuto, oppure NaN (`unavailable`) | solo testo centrato "In attesa dati…" o "Dati non disponibili" |
+| 1 | SOC mai ricevuto, oppure NaN (`unavailable`) | solo testo centrato: "In attesa dati...", oppure "HA non connesso" / "WiFi non connesso" se manca la connessione (dopo il reboot automatico di ESPHome per timeout di 15 min non ci sono ultimi valori), oppure "Dati non disponibili" |
 | 2 | `!wifi.connected` oppure `!api.connected` | ultimi valori **in grigio**, pallino WiFi/HA rosso, in basso a destra "HA non connesso" |
-| 3 | `data_age > stale_after_min` | percentuale e barra **in grigio**, "agg. N min fa" in giallo |
+| 3 | `data_age > stale_after_min` | percentuale, barra, riga di stato e kWh **in grigio**, "agg. N min fa" in giallo |
 | 4 | altrimenti | normale, colori per soglia, pallini verdi |
 
 Lo stato 2 MUST essere rilevato dall'ESP: con l'API scollegata `data_age` smette di aggiornarsi. Se `data_age` è NaN l'età non viene mostrata e lo stato 3 non si applica.
