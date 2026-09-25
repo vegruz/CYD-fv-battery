@@ -2,7 +2,7 @@
 
 ## Descrizione del progetto
 
-Display a parete in garage (Freenove CYD 2,8", ESP32 + ILI9341, 320×240) che mostra lo stato
+Display a parete in garage (Freenove ESP32 Display FNK0103 B: ESP32 + pannello 2,8" TN ST7789, 320×240) che mostra lo stato
 dell'accumulo fotovoltaico SolarEdge (30 kWh) letto da Home Assistant: SOC %, barra, kWh
 disponibili, carica/scarica con potenza, età del dato e stato connessione. Retroilluminazione
 comandata da HA su movimento della telecamera Reolink.
@@ -11,8 +11,8 @@ Spec di riferimento: `specs/2026-09-25-display-garage-design.md`. Handoff origin
 
 ## Stack tecnologico
 
-- ESPHome (framework ESP-IDF, default dal 2026.1), piattaforma display `mipi_spi` (preset `ESP32-2432S028`); fallback `ili9xxx` (deprecata)
-- C++ per il rendering (`esphome/ui.h`), YAML per config e package
+- ESPHome 2026.9.0 (framework ESP-IDF), piattaforma display `mipi_spi` (preset `ESP32-2432S028-7789`, BGR, no inversione); fallback `ili9xxx` (deprecata)
+- C++: logica pura `esphome/ui_logic.h` (testata su PC con g++/Docker), disegno `esphome/ui.h`; YAML per config e package
 - Home Assistant: integrazione SolarEdge **cloud** (~15 min di latenza), template sensor, automazioni
 - GitHub Actions per config/compile
 
@@ -23,15 +23,17 @@ Spec di riferimento: `specs/2026-09-25-display-garage-design.md`. Handoff origin
 
 ## Comandi
 
-- Setup: `python -m venv .venv && .venv/Scripts/pip install esphome`
-- Validazione: `.venv/Scripts/esphome config esphome/display-garage.yaml`
-- Build: `.venv/Scripts/esphome compile esphome/display-garage.yaml` (e `display-garage-ili9xxx.yaml`)
-- Flash/log: `.venv/Scripts/esphome run esphome/display-garage.yaml` / `esphome logs ...`
+- Setup: `py -3.14 -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+- Verifica completa (test logica + config/compile di entrambi i driver): `sh scripts/check.sh`
+- Solo test logica UI (g++ o Docker `gcc:14`; Docker Desktop deve essere avviato): `sh scripts/test-logic.sh`
+- Singolo driver: `.venv/Scripts/esphome.exe -s display_driver ili9xxx compile esphome/display-garage.yaml`
+- Flash USB: `.venv/Scripts/esphome.exe run esphome/display-garage.yaml --device COM5`; OTA: `--device display-garage.local`
+- Windows: da PowerShell impostare prima `$env:ESPHOME_ESP_IDF_PREFIX = 'C:\ESPHome\idf'` (percorsi lunghi); da Git Bash ci pensa `scripts/check.sh` (toglie anche `MSYSTEM`, rifiutato dall'installer ESP-IDF)
 
 ## Vincoli di progetto
 
 - Solo scheda CYD 2,8". Niente Modbus, niente LVGL/touch, niente consiglio "CARICA ORA" (non-goals della spec).
-- Il driver display sta solo in `packages/display-*.yaml`; il rendering solo in `ui.h`. I package driver chiamano `draw_ui(it, UiConfig{...})`.
+- Il driver display sta solo in `packages/display-*.yaml` (scelto con la substitution `display_driver`); logica pura in `ui_logic.h`, disegno in `ui.h`. Le due lambda dei driver MUST restare identiche.
 - Parametri (entità, soglie, capacità, segno potenza) solo come `substitutions` in `display-garage.yaml`, mai hardcoded nel C++.
 - L'età del dato si calcola in HA (`last_reported`), non sull'ESP: i sensori `homeassistant` arrivano solo al cambio di stato.
 - `esphome/secrets.yaml` non va mai committato.
@@ -55,7 +57,7 @@ Spec di riferimento: `specs/2026-09-25-display-garage-design.md`. Handoff origin
 
 ## Criteri di qualità dei test
 
-- Ogni modifica MUST passare `esphome config` e `esphome compile` su `display-garage.yaml` e `display-garage-ili9xxx.yaml` (anche in CI).
+- Ogni modifica MUST passare `sh scripts/check.sh` (test logica + config/compile di `mipi` e `ili9xxx`, anche in CI). Ogni modifica a soglie o stati MUST avere un caso in `tests/test_ui_logic.cpp`.
 - Edge case ed error case della spec (tabellari) verificati a mano sulla scheda; soglie testate sui valori limite.
 - Verifiche su HA (entity_id, segno potenza, `last_reported`) documentate con esito nella spec.
 - Nessuna feature si considera completata senza evidenza (output dei comandi o verifica sulla scheda).
